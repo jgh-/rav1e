@@ -182,6 +182,8 @@ impl TileBlocksMut<'_> {
   pub fn set_block_size(&mut self, bo: BlockOffset, bsize: BlockSize) {
     let n4_w = bsize.width_mi();
     let n4_h = bsize.height_mi();
+    let aspect = if n4_w > n4_h { n4_w / n4_h } else { n4_h / n4_w };
+    assert!(aspect <= 4);
     self.for_each(bo, bsize, |block| {
       block.bsize = bsize;
       block.n4_w = n4_w;

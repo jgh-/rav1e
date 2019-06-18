@@ -185,11 +185,12 @@ macro_rules! tile_restoration_plane_common {
 
       fn restoration_unit_index(&self, sbo: SuperBlockOffset) -> Option<(usize, usize)> {
         // there is 1 restoration unit for (1 << sb_shift) super-blocks
-        let mask = (1 << self.rp_cfg.sb_shift) - 1;
-        let first_sbo = sbo.x & mask == 0 && sbo.y & mask == 0;
+        let mask_x = (1 << self.rp_cfg.sb_shift_x) - 1;
+        let mask_y = (1 << self.rp_cfg.sb_shift_y) - 1;
+        let first_sbo = sbo.x & mask_x == 0 && sbo.y & mask_y == 0;
         if first_sbo {
-          let x = sbo.x >> self.rp_cfg.sb_shift;
-          let y = sbo.y >> self.rp_cfg.sb_shift;
+          let x = sbo.x >> self.rp_cfg.sb_shift_x;
+          let y = sbo.y >> self.rp_cfg.sb_shift_y;
           if x < self.units.cols && y < self.units.rows {
             Some((x, y))
           } else {
@@ -296,16 +297,17 @@ macro_rules! tile_restoration_state_common {
         sb_width: usize,
         sb_height: usize,
       ) -> (usize, usize, usize, usize) {
-        let sb_shift = rs.planes[0].cfg.sb_shift;
+        let sb_shift_x = rs.planes[0].cfg.sb_shift_x;
+        let sb_shift_y = rs.planes[0].cfg.sb_shift_y;
         // there may be several super-blocks per restoration unit
         // the given super-block offset must match the start of a restoration unit
-        debug_assert!(sbo.x % (1 << sb_shift) == 0);
-        debug_assert!(sbo.y % (1 << sb_shift) == 0);
+        debug_assert!(sbo.x % (1 << sb_shift_x) == 0);
+        debug_assert!(sbo.y % (1 << sb_shift_y) == 0);
 
-        let units_x = sbo.x >> sb_shift;
-        let units_y = sbo.y >> sb_shift;
-        let units_cols = sb_width >> sb_shift;
-        let units_rows = sb_height >> sb_shift;
+        let units_x = sbo.x >> sb_shift_x;
+        let units_y = sbo.y >> sb_shift_y;
+        let units_cols = sb_width >> sb_shift_x;
+        let units_rows = sb_height >> sb_shift_y;
 
         let FrameRestorationUnits { cols: rs_cols, rows: rs_rows, .. } = rs.planes[0].units;
         // +1 because the last super-block may use the "stretched" restoration unit

@@ -605,7 +605,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         if skip { tx_type = TxType::DCT_DCT; };
 
         if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
-          cw.write_partition(wr, tile_bo, PartitionType::PARTITION_NONE, bsize);
+          cw.write_partition(wr, ts, tile_bo, PartitionType::PARTITION_NONE, bsize);
         }
 
         // TODO(yushin): luma and chroma would have different decision based on chroma format
@@ -1123,6 +1123,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   let cw_checkpoint = cw.checkpoint();
   let w_pre_checkpoint = w_pre_cdef.checkpoint();
   let w_post_checkpoint = w_post_cdef.checkpoint();
+  let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
   for &partition in partition_types {
     // Do not re-encode results we already have
@@ -1135,7 +1136,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
 
     match partition {
       PartitionType::PARTITION_NONE => {
-        if bsize > BlockSize::BLOCK_64X64 {
+        if bsize > BlockSize::BLOCK_64X64 || get_plane_block_size(bsize, xdec, ydec) == BlockSize::BLOCK_INVALID {
           continue;
         }
 
@@ -1155,7 +1156,8 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
       PARTITION_VERT => {
         let subsize = bsize.subsize(partition);
 
-        if subsize == BlockSize::BLOCK_INVALID {
+        //  Check that the block size we intend to test is an allowed size based on subsampling
+        if subsize == BlockSize::BLOCK_INVALID || get_plane_block_size(subsize, xdec, ydec) == BlockSize::BLOCK_INVALID {
           continue;
         }
 
@@ -1184,7 +1186,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
         if bsize >= BlockSize::BLOCK_8X8 {
           let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
           let tell = w.tell_frac();
-          cw.write_partition(w, tile_bo, partition, bsize);
+          cw.write_partition(w, ts, tile_bo, partition, bsize);
           cost = (w.tell_frac() - tell) as f64 * fi.lambda
             / ((1 << OD_BITRES) as f64);
         }
@@ -1203,7 +1205,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
 
           if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
             let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
-            cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
+            cw.write_partition(w, ts, offset, PartitionType::PARTITION_NONE, subsize);
           }
           encode_block_with_modes(fi, ts, cw, w_pre_cdef, w_post_cdef, subsize,
                                   offset, &mode_decision, rdo_type);

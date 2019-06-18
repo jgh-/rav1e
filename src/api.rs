@@ -499,8 +499,8 @@ impl Config {
 
     // FIXME: inter unsupported with 4:2:2 and 4:4:4 chroma sampling
     let chroma_sampling = config.chroma_sampling;
-    let keyframe_only = chroma_sampling == ChromaSampling::Cs444 ||
-      chroma_sampling == ChromaSampling::Cs422;
+    let keyframe_only = false;/*chroma_sampling == ChromaSampling::Cs444 ||
+      chroma_sampling == ChromaSampling::Cs422;*/
     if keyframe_only {
       config.max_key_frame_interval = 1;
       config.min_key_frame_interval = 1;

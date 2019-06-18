@@ -880,17 +880,17 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       if use_lrf {
         // The Y shift value written here indicates shift up from superblock size
         if !fi.sequence.use_128x128_superblock {
-          self.write(1, if rs.planes[0].cfg.unit_size > 64 { 1 } else { 0 })?;
+          self.write(1, if rs.planes[0].cfg.unit_h > 64 { 1 } else { 0 })?;
         }
 
-        if rs.planes[0].cfg.unit_size > 64 {
-          self.write(1, if rs.planes[0].cfg.unit_size > 128 { 1 } else { 0 })?;
+        if rs.planes[0].cfg.unit_h > 64 {
+          self.write(1, if rs.planes[0].cfg.unit_h > 128 { 1 } else { 0 })?;
         }
 
         if use_chroma_lrf && fi.sequence.chroma_sampling == ChromaSampling::Cs420 {
           self.write(
             1,
-            if rs.planes[0].cfg.unit_size > rs.planes[1].cfg.unit_size { 1 } else { 0 }
+            if rs.planes[0].cfg.unit_h > rs.planes[1].cfg.unit_h { 1 } else { 0 }
           )?;
         }
       }

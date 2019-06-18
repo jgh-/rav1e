@@ -228,6 +228,9 @@ impl BlockSize {
 
   pub fn largest_uv_tx_size(self, xdec: usize, ydec: usize) -> TxSize {
     let plane_bsize = get_plane_block_size(self, xdec, ydec);
+    if (plane_bsize as usize) >= BlockSize::BLOCK_SIZES_ALL {
+      println!("Failure! [{}] plane_bsize={}x{} decimation: {}x{}", self as usize, self.width(), self.height(), xdec, ydec);
+    }
     debug_assert!((plane_bsize as usize) < BlockSize::BLOCK_SIZES_ALL);
     let uv_tx = max_txsize_rect_lookup[plane_bsize as usize];
 

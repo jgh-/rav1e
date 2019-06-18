@@ -213,8 +213,8 @@ impl Sequence {
       enable_warped_motion: false,
       enable_superres: false,
       enable_cdef: config.speed_settings.cdef,
-      enable_restoration: config.chroma_sampling != ChromaSampling::Cs422 &&
-        config.chroma_sampling != ChromaSampling::Cs444, // FIXME: not working yet
+      enable_restoration: true /*config.chroma_sampling != ChromaSampling::Cs422 &&
+        config.chroma_sampling != ChromaSampling::Cs444*/, // FIXME: not working yet
       operating_points_cnt_minus_1: 0,
       operating_point_idc,
       display_model_info_present_flag: false,
@@ -1418,10 +1418,10 @@ pub fn write_tx_tree<T: Pixel>(
     // TODO: Disable these asserts temporarilly, since chroma_sampling_422_aom and chroma_sampling_444_aom
     // tests seems trigerring them as well, which should not
     // TODO: Not valid if partition > 64x64 && chroma != 420
-    /*if xdec == 1 && ydec == 1 {
+    if xdec == 1 && ydec == 1 {
       debug_assert!(bw_uv == 1, "bw_uv = {}, bh_uv = {}", bw_uv, bh_uv);
       debug_assert!(bh_uv == 1, "bw_uv = {}, bh_uv = {}", bw_uv, bh_uv);
-    }*/
+    }
     let uv_tx_type = if has_coeff {tx_type} else {TxType::DCT_DCT}; // if inter mode, uv_tx_type == tx_type
 
     for p in 1..3 {
@@ -1514,7 +1514,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     let cost = if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
       let w: &mut W = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
       let tell = w.tell_frac();
-      cw.write_partition(w, tile_bo, PartitionType::PARTITION_NONE, bsize);
+      cw.write_partition(w, ts, tile_bo, PartitionType::PARTITION_NONE, bsize);
       (w.tell_frac() - tell) as f64 * fi.lambda / ((1 << OD_BITRES) as f64)
     } else {
       0.0
@@ -1581,7 +1581,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       if bsize.gte(BlockSize::BLOCK_8X8) {
         let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
         let tell = w.tell_frac();
-        cw.write_partition(w, tile_bo, partition, bsize);
+        cw.write_partition(w, ts, tile_bo, partition, bsize);
         rd_cost = (w.tell_frac() - tell) as f64 * fi.lambda
           / ((1 << OD_BITRES) as f64);
       }
@@ -1650,7 +1650,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
         if bsize.gte(BlockSize::BLOCK_8X8) {
           let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
-          cw.write_partition(w, tile_bo, best_partition, bsize);
+          cw.write_partition(w, ts, tile_bo, best_partition, bsize);
         }
         for mode in rdo_output.part_modes.clone() {
           assert!(subsize == mode.bsize);
@@ -1754,7 +1754,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
   if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
-    cw.write_partition(w, tile_bo, partition, bsize);
+    cw.write_partition(w, ts, tile_bo, partition, bsize);
   }
 
   match partition {

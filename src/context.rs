@@ -169,30 +169,30 @@ pub static sub_tx_size_map: [TxSize; TxSize::TX_SIZES_ALL] = [
 ];
 
 static ss_size_lookup: [[[BlockSize; 2]; 2]; BlockSize::BLOCK_SIZES_ALL] = [
-  //  ss_x == 0    ss_x == 0        ss_x == 1      ss_x == 1
-  //  ss_y == 0    ss_y == 1        ss_y == 0      ss_y == 1
-  [  [ BLOCK_4X4, BLOCK_4X4 ], [BLOCK_4X4, BLOCK_4X4 ] ],
-  [  [ BLOCK_4X8, BLOCK_4X4 ], [BLOCK_4X4, BLOCK_4X4 ] ],
-  [  [ BLOCK_8X4, BLOCK_4X4 ], [BLOCK_4X4, BLOCK_4X4 ] ],
-  [  [ BLOCK_8X8, BLOCK_8X4 ], [BLOCK_4X8, BLOCK_4X4 ] ],
-  [  [ BLOCK_8X16, BLOCK_8X8 ], [BLOCK_4X16, BLOCK_4X8 ] ],
-  [  [ BLOCK_16X8, BLOCK_16X4 ], [BLOCK_8X8, BLOCK_8X4 ] ],
-  [  [ BLOCK_16X16, BLOCK_16X8 ], [BLOCK_8X16, BLOCK_8X8 ] ],
-  [  [ BLOCK_16X32, BLOCK_16X16 ], [BLOCK_8X32, BLOCK_8X16 ] ],
-  [  [ BLOCK_32X16, BLOCK_32X8 ], [BLOCK_16X16, BLOCK_16X8 ] ],
-  [  [ BLOCK_32X32, BLOCK_32X16 ], [BLOCK_16X32, BLOCK_16X16 ] ],
-  [  [ BLOCK_32X64, BLOCK_32X32 ], [BLOCK_16X64, BLOCK_16X32 ] ],
-  [  [ BLOCK_64X32, BLOCK_64X16 ], [BLOCK_32X32, BLOCK_32X16 ] ],
-  [  [ BLOCK_64X64, BLOCK_64X32 ], [BLOCK_32X64, BLOCK_32X32 ] ],
-  [  [ BLOCK_64X128, BLOCK_64X64 ], [ BLOCK_INVALID, BLOCK_32X64 ] ],
-  [  [ BLOCK_128X64, BLOCK_INVALID ], [ BLOCK_64X64, BLOCK_64X32 ] ],
-  [  [ BLOCK_128X128, BLOCK_128X64 ], [ BLOCK_64X128, BLOCK_64X64 ] ],
-  [  [ BLOCK_4X16, BLOCK_4X8 ], [BLOCK_4X16, BLOCK_4X8 ] ],
-  [  [ BLOCK_16X4, BLOCK_16X4 ], [BLOCK_8X4, BLOCK_8X4 ] ],
-  [  [ BLOCK_8X32, BLOCK_8X16 ], [BLOCK_INVALID, BLOCK_4X16 ] ],
-  [  [ BLOCK_32X8, BLOCK_INVALID ], [BLOCK_16X8, BLOCK_16X4 ] ],
-  [  [ BLOCK_16X64, BLOCK_16X32 ], [BLOCK_INVALID, BLOCK_8X32 ] ],
-  [  [ BLOCK_64X16, BLOCK_INVALID ], [BLOCK_32X16, BLOCK_32X8 ] ]
+  //  ss_x == 0       ss_x == 0         ss_x == 1       ss_x == 1
+  //  ss_y == 0       ss_y == 1         ss_y == 0       ss_y == 1
+  [  [ BLOCK_4X4,     BLOCK_4X4 ],     [BLOCK_4X4,      BLOCK_4X4 ] ],
+  [  [ BLOCK_4X8,     BLOCK_4X4 ],     [BLOCK_INVALID,  BLOCK_4X4 ] ],
+  [  [ BLOCK_8X4,     BLOCK_INVALID ], [BLOCK_4X4,      BLOCK_4X4 ] ],
+  [  [ BLOCK_8X8,     BLOCK_8X4 ],     [BLOCK_4X8,      BLOCK_4X4 ] ],
+  [  [ BLOCK_8X16,    BLOCK_8X8 ],     [BLOCK_INVALID,  BLOCK_4X8 ] ],
+  [  [ BLOCK_16X8,    BLOCK_INVALID ], [BLOCK_8X8,      BLOCK_8X4 ] ],
+  [  [ BLOCK_16X16,   BLOCK_16X8 ],    [BLOCK_8X16,     BLOCK_8X8 ] ],
+  [  [ BLOCK_16X32,   BLOCK_16X16 ],   [BLOCK_INVALID,  BLOCK_8X16 ] ],
+  [  [ BLOCK_32X16,   BLOCK_INVALID ], [BLOCK_16X16,    BLOCK_16X8 ] ],
+  [  [ BLOCK_32X32,   BLOCK_32X16 ],   [BLOCK_16X32,    BLOCK_16X16 ] ],
+  [  [ BLOCK_32X64,   BLOCK_32X32 ],   [BLOCK_INVALID,  BLOCK_16X32 ] ],
+  [  [ BLOCK_64X32,   BLOCK_INVALID ], [BLOCK_32X32,    BLOCK_32X16 ] ],
+  [  [ BLOCK_64X64,   BLOCK_64X32 ],   [BLOCK_32X64,    BLOCK_32X32 ] ],
+  [  [ BLOCK_64X128,  BLOCK_64X64 ],   [BLOCK_INVALID,  BLOCK_32X64 ] ],
+  [  [ BLOCK_128X64,  BLOCK_INVALID ], [BLOCK_64X64,    BLOCK_64X32 ] ],
+  [  [ BLOCK_128X128, BLOCK_128X64 ],  [BLOCK_64X128,   BLOCK_64X64 ] ],
+  [  [ BLOCK_4X16,    BLOCK_4X8 ],     [BLOCK_INVALID,  BLOCK_4X8 ] ],
+  [  [ BLOCK_16X4,    BLOCK_INVALID ], [BLOCK_8X4,      BLOCK_8X4 ] ],
+  [  [ BLOCK_8X32,    BLOCK_8X16 ],    [BLOCK_INVALID,  BLOCK_4X16 ] ],
+  [  [ BLOCK_32X8,    BLOCK_INVALID ], [BLOCK_16X8,     BLOCK_16X4 ] ],
+  [  [ BLOCK_16X64,   BLOCK_16X32 ],   [BLOCK_INVALID,  BLOCK_8X32 ] ],
+  [  [ BLOCK_64X16,   BLOCK_INVALID ], [BLOCK_32X16,    BLOCK_32X8 ] ]
 ];
 
 pub fn get_plane_block_size(bsize: BlockSize, subsampling_x: usize, subsampling_y: usize)
@@ -1945,14 +1945,22 @@ impl<'a> ContextWriter<'a> {
     out[1] = 0;
   }
 
-  pub fn write_partition(
-    &mut self, w: &mut impl Writer, bo: BlockOffset, p: PartitionType, bsize: BlockSize
+  pub fn write_partition<T: Pixel>(
+    &mut self, w: &mut impl Writer, _ts: &mut TileStateMut<'_, T>, bo: BlockOffset, p: PartitionType, bsize: BlockSize
   ) {
     debug_assert!(bsize.is_sqr());
     assert!(bsize >= BlockSize::BLOCK_8X8 );
     let hbs = bsize.width_mi() / 2;
+
+    /*  int partition_none_allowed = has_rows && has_cols;
+  int partition_horz_allowed = has_cols && yss <= xss && bsize_at_least_8x8 &&
+                               cpi->oxcf.enable_rect_partitions;
+  int partition_vert_allowed = has_rows && xss <= yss && bsize_at_least_8x8 &&
+                               cpi->oxcf.enable_rect_partitions;*/
+    //let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
     let has_cols = (bo.x + hbs) < self.bc.blocks.cols();
     let has_rows = (bo.y + hbs) < self.bc.blocks.rows();
+
     let ctx = self.bc.partition_plane_context(bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
     let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {

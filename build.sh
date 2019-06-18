@@ -5,7 +5,7 @@ set -e
 
 #SEQ=!!!!! ENTER YOUR FAVORITE Y4M HERE !!!!!
 
-IS_RELEASE=1
+IS_RELEASE=0
 
 for arg in "$@"; do
   shift
@@ -48,10 +48,11 @@ if [ $IS_RELEASE == 1 ]; then
   BUILD_TYPE="--release"
 fi
 
-cargo run --bin rav1e $BUILD_TYPE -- $SEQ -o $ENC_FILE -s 3 -r $REC_FILE
+# export RUSTFLAGS="-Z sanitizer=address -g"
+cargo run --bin rav1e $BUILD_TYPE --target x86_64-unknown-linux-gnu -- $SEQ -o $ENC_FILE -s 3 -r $REC_FILE
 
 # Decode
-aomdec $ENC_FILE -o $DEC_FILE
+../aom/build/aomdec $ENC_FILE -o $DEC_FILE
 
 # Input/Output compare
 tail -n+2 $DEC_FILE > /tmp/dec_file

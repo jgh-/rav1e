@@ -825,10 +825,12 @@ impl IndexMut<usize> for FrameRestorationUnits {
 #[derive(Clone, Debug)]
 pub struct RestorationPlaneConfig {
   pub lrf_type: u8,
-  pub unit_size: usize,
+  pub unit_w: usize,
+  pub unit_h: usize,
   // (1 << sb_shift) gives the number of superblocks both horizontally and
   // vertically in a restoration unit, not accounting for RU stretching
-  pub sb_shift: usize,
+  pub sb_shift_x: usize,
+  pub sb_shift_y: usize,
   // stripe height is 64 in all cases except 4:2:0 chroma planes where
   // it is 32.  This is independent of all other setup parameters
   pub stripe_height: usize,
@@ -849,14 +851,17 @@ pub struct RestorationPlaneOffset {
 }
 
 impl RestorationPlane {
-  pub fn new(lrf_type: u8, unit_size: usize, sb_shift: usize, stripe_decimate: usize,
+  pub fn new(lrf_type: u8, unit_w: usize, unit_h: usize, sb_shift_x: usize, sb_shift_y: usize, stripe_decimate: usize,
              cols: usize, rows: usize) -> RestorationPlane {
-    let stripe_height = if stripe_decimate != 0 {32} else {64};
+    let stripe_height = unit_h;//if stripe_decimate != 0 {32} else {64};
+    println!("RestorationPlane::new({}, {}, {}, {}, {}, {})", unit_w, unit_h, sb_shift_x, sb_shift_y, cols, rows);
     RestorationPlane {
       cfg: RestorationPlaneConfig {
         lrf_type,
-        unit_size,
-        sb_shift,
+        unit_w,
+        unit_h,
+        sb_shift_x,
+        sb_shift_y,
         stripe_height,
         cols,
         rows,
@@ -871,7 +876,7 @@ impl RestorationPlane {
   fn restoration_unit_index_by_stripe(&self, stripenum: usize, rux: usize) -> (usize, usize) {
     (
       cmp::min(rux, self.cfg.cols - 1),
-      cmp::min(stripenum * self.cfg.stripe_height / self.cfg.unit_size, self.cfg.rows - 1),
+      cmp::min(stripenum * self.cfg.stripe_height / self.cfg.unit_h, self.cfg.rows - 1),
     )
   }
 
@@ -889,33 +894,37 @@ pub struct RestorationState {
 impl RestorationState {
   pub fn new<T: Pixel>(fi: &FrameInvariants<T>, input: &Frame<T>) -> Self {
     let PlaneConfig { xdec, ydec, .. } = input.planes[1].cfg;
-    let stripe_uv_decimate = if xdec>0 && ydec>0 {1} else {0};
+    //let stripe_uv_decimate = if xdec>0 || ydec>0 {1} else {0};
     // Currrently opt for smallest possible restoration unit size (1
     // superblock) This is *temporary*.  Counting on it will break
     // very shortly; the 1-superblock hardwiring is only until the
     // upper level encoder is capable of dealing with the delayed
     // writes that RU size > SB size will require.
     let lrf_y_shift = if fi.sequence.use_128x128_superblock {1} else {2};
-    let lrf_uv_shift = lrf_y_shift + stripe_uv_decimate;
 
     // derive the rest
     let y_unit_log2 = RESTORATION_TILESIZE_MAX_LOG2 - lrf_y_shift;
-    let uv_unit_log2 = RESTORATION_TILESIZE_MAX_LOG2 - lrf_uv_shift;
-    let y_unit_size = 1 << y_unit_log2;
-    let uv_unit_size = 1 << uv_unit_log2;
+    let y_unit_w = 1 << y_unit_log2;
+    let y_unit_h = 1 << y_unit_log2;
+    let uv_unit_w = 1 << y_unit_log2 >> xdec;
+    let uv_unit_h = 1 << y_unit_log2 >> ydec;
     let y_sb_log2 = if fi.sequence.use_128x128_superblock {7} else {6};
-    let uv_sb_log2 = y_sb_log2 - stripe_uv_decimate;
-    let cols = ((fi.width + (y_unit_size >> 1)) / y_unit_size).max(1);
-    let rows = ((fi.height + (y_unit_size >> 1)) / y_unit_size).max(1);
 
+    let cols = ((fi.width + (y_unit_w >> 1)) / y_unit_w).max(1);
+    let uv_cols = (((fi.width >> xdec) + (uv_unit_w >> 1)) / uv_unit_w).max(1);
+    let rows = ((fi.height + (y_unit_h >> 1)) / y_unit_h).max(1);
+    let uv_rows = (((fi.height >> ydec) + (uv_unit_h >> 1)) / uv_unit_h).max(1);
+    let uv_sb_log2_x = (uv_unit_w-1) >> y_unit_log2;
+    let uv_sb_log2_y = (uv_unit_h-1) >> y_unit_log2;
+    println!("uv_unit_size {}x{} y_unit_log2 {} 128x128? {}", uv_unit_w, uv_unit_h, y_unit_log2, fi.sequence.use_128x128_superblock);
     RestorationState {
       planes: [
-        RestorationPlane::new(RESTORE_SWITCHABLE, y_unit_size, y_unit_log2 - y_sb_log2,
+        RestorationPlane::new(RESTORE_SWITCHABLE, y_unit_w, y_unit_h, y_unit_log2 - y_sb_log2, y_unit_log2 - y_sb_log2,
                               0, cols, rows),
-        RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, uv_unit_log2 - uv_sb_log2,
-                              stripe_uv_decimate, cols, rows),
-        RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, uv_unit_log2 - uv_sb_log2,
-                              stripe_uv_decimate, cols, rows)
+        RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_w, uv_unit_h, uv_sb_log2_x, uv_sb_log2_y,
+                              0, uv_cols, uv_rows),
+        RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_w, uv_unit_h, uv_sb_log2_x, uv_sb_log2_y,
+                              0, uv_cols, uv_rows)
       ],
     }
   }
@@ -942,23 +951,23 @@ impl RestorationState {
       for si in 0..stripe_n {
         // stripe y pixel locations must be able to overspan the frame
         let stripe_start_y = (si as isize * 64 - 8) >> ydec;
-        let stripe_size = 64 >> ydec; // one past, unlike spec
+        let stripe_h = 64 >> ydec; // one past, unlike spec
 
         // horizontally, go rdu-by-rdu
         for rux in 0..rp.cfg.cols {
           // stripe x pixel locations must be clipped to frame, last may need to stretch
-          let x = rux * rp.cfg.unit_size;
-          let size = if rux == rp.cfg.cols - 1 {
+          let x = rux * rp.cfg.unit_w;
+          let stripe_w = if rux == rp.cfg.cols - 1 {
             crop_w - x
           } else {
-            rp.cfg.unit_size
+            rp.cfg.unit_w
           };
           let ru = rp.restoration_unit_by_stripe(si, rux);
           match ru.filter {
             RestorationFilter::Wiener{coeffs} => {
               wiener_stripe_filter(coeffs, fi,
                                    crop_w, crop_h,
-                                   size, stripe_size,
+                                   stripe_w, stripe_h,
                                    x, stripe_start_y,
                                    &cdeffed.planes[pli], &pre_cdef.planes[pli],
                                    &mut out.planes[pli]);
@@ -967,7 +976,7 @@ impl RestorationState {
               sgrproj_stripe_filter(set, xqd, fi,
                                     crop_w - x,
                                     (crop_h as isize - stripe_start_y) as usize,
-                                    size, stripe_size,
+                                    stripe_w, stripe_h,
                                     &cdeffed.planes[pli].slice(PlaneOffset{x: x as isize,
                                                                            y: stripe_start_y}),
                                     &pre_cdef.planes[pli].slice(PlaneOffset{x: x as isize,
