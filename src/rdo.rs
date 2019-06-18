@@ -1059,6 +1059,7 @@ pub fn get_sub_partitions(four_partitions: &[BlockOffset; 4],
     return partitions;
   }
   if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
+    //println!("[2]returning vert split...");
     partitions.push(four_partitions[1]);
   };
   if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
@@ -1090,6 +1091,7 @@ pub fn get_sub_partitions_with_border_check(
   if (partition == PARTITION_VERT || partition == PARTITION_SPLIT) &&
     four_partitions[1].x + hbsw <= mi_width &&
     four_partitions[1].y + hbsh <= mi_height {
+      //println!("[1]returning vert split...");
     partitions.push(four_partitions[1]);
   };
 
@@ -1165,13 +1167,16 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
 
         assert!(best_pred_modes.len() <= 4);
 
+        let can_split_vert = ydec <= xdec;
+        let can_split_horiz = xdec <= ydec;
         let hbsw = subsize.width_mi(); // Half the block size width in blocks
         let hbsh = subsize.height_mi(); // Half the block size height in blocks
+        let split_bo = BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y + hbsh as usize };
         let four_partitions = [
           tile_bo,
-          BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y },
-          BlockOffset{ x: tile_bo.x, y: tile_bo.y + hbsh as usize },
-          BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y + hbsh as usize }
+          if can_split_vert { BlockOffset{ x: tile_bo.x, y: tile_bo.y + hbsh as usize } } else { tile_bo },
+          if can_split_horiz { BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y } } else { tile_bo },
+          split_bo
         ];
         let partitions = get_sub_partitions_with_border_check(&four_partitions, partition, ts.mi_width, ts.mi_height, subsize);
 

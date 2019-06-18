@@ -1486,11 +1486,11 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     part_type: PartitionType::PARTITION_INVALID,
     part_modes: Vec::new()
   };
-
+  
   if tile_bo.x >= cw.bc.blocks.cols() || tile_bo.y >= cw.bc.blocks.rows() {
     return rdo_output
   }
-
+  let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let bsw = bsize.width_mi();
   let bsh = bsize.height_mi();
   let is_square = bsize.is_sqr();
@@ -1556,7 +1556,10 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     for &partition in RAV1E_PARTITION_TYPES {
       if partition == PartitionType::PARTITION_NONE { continue; }
       if fi.sequence.chroma_sampling == ChromaSampling::Cs422 &&
-        partition == PartitionType::PARTITION_VERT { continue; }
+        partition == PartitionType::PARTITION_VERT { 
+          println!("422 && PARTITION_VERT");
+          continue; 
+        }
 
       if must_split {
         let cbw = (ts.mi_width - tile_bo.x).min(bsw); // clipped block width, i.e. having effective pixels
@@ -1586,12 +1589,16 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           / ((1 << OD_BITRES) as f64);
       }
 
+      let can_split_vert = ydec <= xdec;
+      let can_split_horiz = xdec <= ydec;
+      let split_bo = BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y + hbsh as usize };
+
       let four_partitions = [
-        tile_bo,
-        BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y },
-        BlockOffset{ x: tile_bo.x, y: tile_bo.y + hbsh as usize },
-        BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y + hbsh as usize }
-      ];
+          tile_bo,
+          if can_split_vert { BlockOffset{ x: tile_bo.x, y: tile_bo.y + hbsh as usize } } else { split_bo },
+          if can_split_horiz { BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y } } else { split_bo },
+          split_bo
+        ];
       let partitions = get_sub_partitions(&four_partitions, partition);
       let mut early_exit = false;
 
@@ -1713,6 +1720,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   let partition: PartitionType;
   let mut split_vert = false;
   let mut split_horz = false;
+  let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   if must_split {
     let cbw = (ts.mi_width - tile_bo.x).min(bsw); // clipped block width, i.e. having effective pixels
     let cbh = (ts.mi_height - tile_bo.y).min(bsh);
@@ -1721,7 +1729,9 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       fi.sequence.chroma_sampling != ChromaSampling::Cs422 { split_vert = true; }
     if cbh == bsh/2 && cbw == bsw { split_horz = true; }
   }
-
+  if split_vert {
+    println!("split_vert");
+  }
   if must_split && (!split_vert && !split_horz) {
     // Oversized blocks are split automatically
     partition = PartitionType::PARTITION_SPLIT;
@@ -1864,16 +1874,19 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         }
       }
       else {
+        let can_split_vert = ydec <= xdec;
+        let can_split_horiz = xdec <= ydec;
         let hbsw = subsize.width_mi(); // Half the block size width in blocks
         let hbsh = subsize.height_mi(); // Half the block size height in blocks
+        let split_bo = BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y + hbsh as usize };
         let four_partitions = [
           tile_bo,
-          BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y },
-          BlockOffset{ x: tile_bo.x, y: tile_bo.y + hbsh as usize },
-          BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y + hbsh as usize }
+          if can_split_vert { BlockOffset{ x: tile_bo.x, y: tile_bo.y + hbsh as usize } } else { split_bo },
+          if can_split_horiz { BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y } } else { split_bo },
+          split_bo
         ];
         let partitions = get_sub_partitions(&four_partitions, partition);
-
+        println!("partition {} split_horiz {} split_vert {}", partition as usize, can_split_vert, can_split_horiz);
         partitions.iter().for_each(|&offset| {
           encode_partition_topdown(
             fi,

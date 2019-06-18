@@ -1946,21 +1946,16 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn write_partition<T: Pixel>(
-    &mut self, w: &mut impl Writer, _ts: &mut TileStateMut<'_, T>, bo: BlockOffset, p: PartitionType, bsize: BlockSize
+    &mut self, w: &mut impl Writer, ts: &mut TileStateMut<'_, T>, bo: BlockOffset, p: PartitionType, bsize: BlockSize
   ) {
     debug_assert!(bsize.is_sqr());
     assert!(bsize >= BlockSize::BLOCK_8X8 );
     let hbs = bsize.width_mi() / 2;
-
-    /*  int partition_none_allowed = has_rows && has_cols;
-  int partition_horz_allowed = has_cols && yss <= xss && bsize_at_least_8x8 &&
-                               cpi->oxcf.enable_rect_partitions;
-  int partition_vert_allowed = has_rows && xss <= yss && bsize_at_least_8x8 &&
-                               cpi->oxcf.enable_rect_partitions;*/
-    //let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
+    let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
     let has_cols = (bo.x + hbs) < self.bc.blocks.cols();
     let has_rows = (bo.y + hbs) < self.bc.blocks.rows();
-
+    let vert_allowed = xdec <= ydec;
+    let horz_allowed = ydec <= xdec;
     let ctx = self.bc.partition_plane_context(bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
     let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {
@@ -1975,7 +1970,7 @@ impl<'a> ContextWriter<'a> {
 
     if has_rows && has_cols {
       symbol_with_update!(self, w, p as u32, partition_cdf);
-    } else if !has_rows && has_cols {
+    } else if !has_rows && has_cols && horz_allowed {
       assert!(p == PartitionType::PARTITION_SPLIT || p == PartitionType::PARTITION_HORZ);
       assert!(bsize > BlockSize::BLOCK_8X8);
       let mut cdf = [0u16; 2];
@@ -1985,7 +1980,7 @@ impl<'a> ContextWriter<'a> {
         bsize
       );
       w.symbol((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
-    } else {
+    } else if has_rows && !has_cols && vert_allowed {
       assert!(p == PartitionType::PARTITION_SPLIT || p == PartitionType::PARTITION_VERT);
       assert!(bsize > BlockSize::BLOCK_8X8);
       let mut cdf = [0u16; 2];
