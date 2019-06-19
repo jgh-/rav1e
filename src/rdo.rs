@@ -373,7 +373,7 @@ pub fn rdo_tx_size_type<T: Pixel>(
                 luma_mode.is_intra();
   let rdo_tx_depth = if do_rdo_tx_size { 2 } else { 0 };
   let cw_checkpoint = cw.checkpoint();
-
+  //println!("rdo_tx_size_type  rdo_tx_depth={}", rdo_tx_depth);
   for _ in 0..=rdo_tx_depth {
     let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
 
@@ -409,8 +409,9 @@ pub fn rdo_tx_size_type<T: Pixel>(
     debug_assert!(tx_size.width_log2() <= bsize.width_log2());
     debug_assert!(tx_size.height_log2() <= bsize.height_log2());
     debug_assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
-
-    tx_size = sub_tx_size_map[best_tx_size as usize];
+    let new_tx_size = sub_tx_size_map[best_tx_size as usize];
+    //println!("rdo_tx_size_type tx_size {}x{} -> {}x{}", tx_size.width(), tx_size.height(), new_tx_size.width(), new_tx_size.height());
+    tx_size = new_tx_size;
     if tx_size == best_tx_size { break; };
 
     cw.rollback(&cw_checkpoint);
@@ -453,7 +454,7 @@ pub fn rdo_mode_decision<T: Pixel>(
   pmvs: &mut [Option<MotionVector>]
 ) -> RDOPartitionOutput {
   let mut best = EncodingSettings::default();
-
+  //println!("rdo_mode_decision");
   // Get block luma and chroma dimensions
   let w = bsize.width();
   let h = bsize.height();
@@ -607,10 +608,10 @@ pub fn rdo_mode_decision<T: Pixel>(
         if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
           cw.write_partition(wr, ts, tile_bo, PartitionType::PARTITION_NONE, bsize);
         }
-
+        
         // TODO(yushin): luma and chroma would have different decision based on chroma format
         let need_recon_pixel = luma_mode_is_intra && tx_size.block_size() != bsize;
-
+        //println!("encoding block: rdo_mode_decision");
         encode_block_a(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
         let tx_dist =
           encode_block_b(
@@ -830,7 +831,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, fi.sequence.bit_depth) {
       let wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
-
+      //println!("encoding block: rdo_mode_decision 2");
       encode_block_a(&fi.sequence, ts, cw, wr, bsize, tile_bo, best.skip);
       let _ = encode_block_b(
         fi,
@@ -1126,7 +1127,6 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   let w_pre_checkpoint = w_pre_cdef.checkpoint();
   let w_post_checkpoint = w_post_cdef.checkpoint();
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-
   for &partition in partition_types {
     // Do not re-encode results we already have
     if partition == cached_block.part_type {
@@ -1160,6 +1160,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
 
         //  Check that the block size we intend to test is an allowed size based on subsampling
         if subsize == BlockSize::BLOCK_INVALID || get_plane_block_size(subsize, xdec, ydec) == BlockSize::BLOCK_INVALID {
+          println!("[rdo] skipping {}", partition as usize);
           continue;
         }
 
@@ -1174,8 +1175,8 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
         let split_bo = BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y + hbsh as usize };
         let four_partitions = [
           tile_bo,
-          if can_split_vert { BlockOffset{ x: tile_bo.x, y: tile_bo.y + hbsh as usize } } else { tile_bo },
-          if can_split_horiz { BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y } } else { tile_bo },
+          if can_split_vert { BlockOffset{ x: tile_bo.x, y: tile_bo.y + hbsh as usize } } else { split_bo },
+          if can_split_horiz { BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y } } else { split_bo },
           split_bo
         ];
         let partitions = get_sub_partitions_with_border_check(&four_partitions, partition, ts.mi_width, ts.mi_height, subsize);

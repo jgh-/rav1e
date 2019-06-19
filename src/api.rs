@@ -498,7 +498,7 @@ impl Config {
     let mut config = self.enc.clone();
 
     // FIXME: inter unsupported with 4:2:2 and 4:4:4 chroma sampling
-    let chroma_sampling = config.chroma_sampling;
+    /*let chroma_sampling = config.chroma_sampling;
     let keyframe_only = false;/*chroma_sampling == ChromaSampling::Cs444 ||
       chroma_sampling == ChromaSampling::Cs422;*/
     if keyframe_only {
@@ -506,9 +506,9 @@ impl Config {
       config.min_key_frame_interval = 1;
     }
     // FIXME: tx partition for intra not supported for chroma 422
-    if chroma_sampling == ChromaSampling::Cs422 {
-      config.speed_settings.rdo_tx_decision = false;
-    }
+//    if chroma_sampling == ChromaSampling::Cs422 {
+//      config.speed_settings.rdo_tx_decision = false;
+//    }*/
 
     let inner = ContextInner::new(&config);
 

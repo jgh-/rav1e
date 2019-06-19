@@ -874,6 +874,7 @@ pub fn encode_tx_block<T: Pixel>(
   let rec = &mut ts.rec.planes[p];
   let area = Area::BlockStartingAt { bo: tile_bo };
 
+  //println!("\t\tencode_tx_block tx_size {}x{}", tx_size.width(), tx_size.height());
   assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
   debug_assert!(p != 0 || !mode.is_intra() || tx_size.block_size() == plane_bsize || need_recon_pixel,
     "mode.is_intra()={:#?}, plane={:#?}, tx_size.block_size()={:#?}, plane_bsize={:#?}, need_recon_pixel={:#?}",
@@ -1289,7 +1290,7 @@ pub fn write_tx_blocks<T: Pixel>(
   let do_chroma = has_chroma(tile_bo, bsize, xdec, ydec);
 
   ts.qc.update(qidx, tx_size, luma_mode.is_intra(), fi.sequence.bit_depth, fi.dc_delta_q[0], 0);
-
+  //println!("write_tx_blocks: bsize {}x{} tx_size {}x{}", bsize.width(), bsize.height(), tx_size.width(),  tx_size.height());
   for by in 0..bh {
     for bx in 0..bw {
       let tx_bo = BlockOffset {
@@ -1298,6 +1299,7 @@ pub fn write_tx_blocks<T: Pixel>(
       };
 
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
+      //println!("\t[luma] calling encode_tx_block {}x{}", tx_size.width(), tx_size.height());
       let (_, dist) =
         encode_tx_block(
           fi, ts, cw, w, 0, tx_bo, luma_mode, tx_size, tx_type, bsize, po,
@@ -1310,7 +1312,7 @@ pub fn write_tx_blocks<T: Pixel>(
 
   if luma_only { return tx_dist };
 
-  let uv_tx_size = bsize.largest_uv_tx_size(xdec, ydec);
+  let uv_tx_size = tx_size.block_size().largest_uv_tx_size(xdec, ydec);
 
   let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
   let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
@@ -1328,7 +1330,7 @@ pub fn write_tx_blocks<T: Pixel>(
   if chroma_mode.is_cfl() {
     luma_ac(&mut ac.array, ts, tile_bo, bsize);
   }
-
+  
   if bw_uv > 0 && bh_uv > 0 {
     // TODO: Disable these asserts temporarilly, since chroma_sampling_422_aom and chroma_sampling_444_aom
     // tests seems trigerring them as well, which should not
@@ -1355,10 +1357,13 @@ pub fn write_tx_blocks<T: Pixel>(
               y: tile_bo.y + ((by * uv_tx_size.height_mi()) << ydec) -
                 ((bh * tx_size.height_mi() == 1) as usize) * ydec
             };
+          //let tx_allowed = get_plane_block_size(tx_size.block_size(), xdec, ydec);
 
           let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
           po.x += (bx * uv_tx_size.width()) as isize;
           po.y += (by * uv_tx_size.height()) as isize;
+          //println!("\t[chroma] calling encode_tx_block {}x{}", uv_tx_size.width(), uv_tx_size.height());
+          //println!("\t[chroma] bsize={}x{} plane_bsize={}x{}", bsize.width(), bsize.height(), plane_bsize.width(), plane_bsize.height());
           let (_, dist) =
             encode_tx_block(fi, ts, cw, w, p, tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
                             plane_bsize, po, skip, &ac.array, alpha, rdo_type, need_recon_pixel);
@@ -1380,6 +1385,7 @@ pub fn write_tx_tree<T: Pixel>(
   bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
   luma_only: bool, rdo_type: RDOType, need_recon_pixel: bool
 ) -> i64 {
+  //println!("write_tx_tree: bsize {}x{} tx_size {}x{}", bsize.width(), bsize.height(), tx_size.width(),  tx_size.height());
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, ts, cw, tile_bo);
@@ -1390,6 +1396,7 @@ pub fn write_tx_tree<T: Pixel>(
 
   ts.qc.update(qidx, tx_size, luma_mode.is_intra(), fi.sequence.bit_depth, fi.dc_delta_q[0], 0);
 
+  //println!("\t[luma]  encoding tx block");
   let po = tile_bo.plane_offset(&ts.input.planes[0].cfg);
   let (has_coeff, dist) = encode_tx_block(
     fi, ts, cw, w, 0, tile_bo, luma_mode, tx_size, tx_type, bsize, po, skip, ac, 0, rdo_type, need_recon_pixel
@@ -1431,6 +1438,7 @@ pub fn write_tx_tree<T: Pixel>(
         y: tile_bo.y  - ((bh * tx_size.height_mi() == 1) as usize)
       };
 
+      //println!("\t[chroma] encoding tx block");
       let po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
       let (_, dist) =
         encode_tx_block(fi, ts, cw, w, p, tx_bo, luma_mode, uv_tx_size, uv_tx_type,
@@ -1465,6 +1473,7 @@ pub fn encode_block_with_modes<T: Pixel>(
   let is_compound = ref_frames[1] != NONE_FRAME;
   let mode_context = cw.find_mvrefs(tile_bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
 
+  //println!("encoding block: encode_block_with_modes");
   cdef_coded = encode_block_a(&fi.sequence, ts, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                               bsize, tile_bo, skip);
   encode_block_b(fi, ts, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
@@ -1680,6 +1689,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
   if is_square && bsize.gte(BlockSize::BLOCK_8X8) &&
     (bsize == BlockSize::BLOCK_8X8 || best_partition != PartitionType::PARTITION_SPLIT) {
+      println!("updating context with {}", best_partition as usize);
       cw.bc.update_partition_context(tile_bo, bsize.subsize(best_partition), bsize);
     }
 
@@ -1717,10 +1727,12 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     rd_cost: std::f64::MAX,
     part_modes: Vec::new()
   });
+  println!("rdo_output.part_type={}", rdo_output.part_type as usize);
   let partition: PartitionType;
   let mut split_vert = false;
   let mut split_horz = false;
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
+
   if must_split {
     let cbw = (ts.mi_width - tile_bo.x).min(bsw); // clipped block width, i.e. having effective pixels
     let cbh = (ts.mi_height - tile_bo.y).min(bsh);
@@ -1729,9 +1741,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       fi.sequence.chroma_sampling != ChromaSampling::Cs422 { split_vert = true; }
     if cbh == bsh/2 && cbw == bsw { split_horz = true; }
   }
-  if split_vert {
-    println!("split_vert");
-  }
+  
   if must_split && (!split_vert && !split_horz) {
     // Oversized blocks are split automatically
     partition = PartitionType::PARTITION_SPLIT;
@@ -1745,6 +1755,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       if split_vert { partition_types.push(PartitionType::PARTITION_VERT); };
     } else if bsize.width_log2() == fi.min_partition_size.width_log2() + 1 {
       partition_types.extend_from_slice(RAV1E_PARTITION_TYPES);
+      println!("using RAV1E_PARTITION_TYPES");
     } else {
       partition_types.push(PartitionType::PARTITION_NONE);
       partition_types.push(PartitionType::PARTITION_SPLIT);
@@ -1752,6 +1763,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     rdo_output = rdo_partition_decision(fi, ts, cw,
                                         w_pre_cdef, w_post_cdef, bsize, tile_bo, &rdo_output, pmvs, &partition_types, rdo_type);
     partition = rdo_output.part_type;
+    println!("decision={}", partition as usize);
   } else {
     // Blocks of sizes below the supported range are encoded directly
     partition = PartitionType::PARTITION_NONE;
@@ -1766,7 +1778,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     cw.write_partition(w, ts, tile_bo, partition, bsize);
   }
-
+  println!("[encoder] partition={}", partition as usize);
   match partition {
     PartitionType::PARTITION_NONE => {
       let part_decision = if !rdo_output.part_modes.is_empty() {
@@ -1849,7 +1861,6 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
           part_decision.ref_frames[0].to_index(), part_decision.mvs[0]
         );
       }
-
       // FIXME: every final block that has gone through the RDO decision process is encoded twice
       cdef_coded = encode_block_a(&fi.sequence, ts, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                   bsize, tile_bo, skip);
@@ -1860,6 +1871,10 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     PARTITION_SPLIT |
     PARTITION_HORZ |
     PARTITION_VERT => {
+      if subsize == BlockSize::BLOCK_INVALID || get_plane_block_size(subsize, xdec, ydec) == BlockSize::BLOCK_INVALID {
+        println!("[encoder] skipping {}", partition as usize);
+        return;
+      }
       if !rdo_output.part_modes.is_empty() {
         // The optimal prediction modes for each split block is known from an rdo_partition_decision() call
         assert!(subsize != BlockSize::BLOCK_INVALID);
@@ -1886,7 +1901,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
           split_bo
         ];
         let partitions = get_sub_partitions(&four_partitions, partition);
-        println!("partition {} split_horiz {} split_vert {}", partition as usize, can_split_vert, can_split_horiz);
+        println!("partition {} can_split_horiz {} can_split_vert {}", partition as usize, can_split_vert, can_split_horiz);
         partitions.iter().for_each(|&offset| {
           encode_partition_topdown(
             fi,
@@ -1907,6 +1922,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
   if is_square && bsize.gte(BlockSize::BLOCK_8X8) &&
     (bsize == BlockSize::BLOCK_8X8 || partition != PartitionType::PARTITION_SPLIT) {
+      println!("{}, {} [encode_topdown] updating context with {} (subsize={}x{}, bsize={}x{})", tile_bo.x, tile_bo.y, partition as usize, subsize.width(), subsize.height(), bsize.width(), bsize.height());
       cw.bc.update_partition_context(tile_bo, subsize, bsize);
     }
 }

@@ -1946,16 +1946,14 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn write_partition<T: Pixel>(
-    &mut self, w: &mut impl Writer, ts: &mut TileStateMut<'_, T>, bo: BlockOffset, p: PartitionType, bsize: BlockSize
+    &mut self, w: &mut impl Writer, _ts: &mut TileStateMut<'_, T>, bo: BlockOffset, p: PartitionType, bsize: BlockSize
   ) {
     debug_assert!(bsize.is_sqr());
     assert!(bsize >= BlockSize::BLOCK_8X8 );
+
     let hbs = bsize.width_mi() / 2;
-    let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
     let has_cols = (bo.x + hbs) < self.bc.blocks.cols();
     let has_rows = (bo.y + hbs) < self.bc.blocks.rows();
-    let vert_allowed = xdec <= ydec;
-    let horz_allowed = ydec <= xdec;
     let ctx = self.bc.partition_plane_context(bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
     let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {
@@ -1970,7 +1968,7 @@ impl<'a> ContextWriter<'a> {
 
     if has_rows && has_cols {
       symbol_with_update!(self, w, p as u32, partition_cdf);
-    } else if !has_rows && has_cols && horz_allowed {
+    } else if !has_rows && has_cols {
       assert!(p == PartitionType::PARTITION_SPLIT || p == PartitionType::PARTITION_HORZ);
       assert!(bsize > BlockSize::BLOCK_8X8);
       let mut cdf = [0u16; 2];
@@ -1980,7 +1978,10 @@ impl<'a> ContextWriter<'a> {
         bsize
       );
       w.symbol((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
-    } else if has_rows && !has_cols && vert_allowed {
+      if(p == PartitionType::PARTITION_HORZ) {
+        println!("p = HORZ, cdf = {} {}", cdf[0], cdf[1]);
+      }
+    } else {
       assert!(p == PartitionType::PARTITION_SPLIT || p == PartitionType::PARTITION_VERT);
       assert!(bsize > BlockSize::BLOCK_8X8);
       let mut cdf = [0u16; 2];
@@ -3505,6 +3506,7 @@ impl<'a> ContextWriter<'a> {
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
     //assert!(!is_inter);
     // Note: Both intra and inter mode uses inter scan order. Surprised?
+    //assert!(!(tx_size.width() == 8 && tx_size.height() == 16));
     let scan_order =
       &av1_scan_orders[tx_size as usize][tx_type as usize];
     let scan = scan_order.scan;
